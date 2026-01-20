@@ -11,5 +11,6 @@
 #endif
 #endif
 
-@interface WhisperKitPlugin : NSObject<FlutterPlugin>
-@end
+// Note: WhisperKitPlugin is defined in Swift (WhisperKitPlugin.swift)
+// The Swift compiler automatically generates the Objective-C interface
+// No manual @interface declaration needed here

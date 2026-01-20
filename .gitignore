@@ -5,7 +5,6 @@
 .idea/
 
 # VS Code
-.vscode/
 
 # Dart & Flutter
 .dart_tool/
@@ -77,3 +76,7 @@ next-steps.txt
 .history
 .svn/
 migrate_working_dir/
+branch_structure.json
+temp_auto_push.bat
+temp_interactive_push.bat
+.gitignore

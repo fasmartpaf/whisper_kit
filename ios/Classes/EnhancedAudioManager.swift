@@ -222,7 +222,14 @@ class EnhancedAudioManager: NSObject {
         }
 
         // Get audio metadata
-        let metadata = formatConverter.getAudioMetadata(url: url)
+        let metadata = formatConverter.getAudioMetadata(url: url) ?? AudioMetadata(
+            duration: 0.0,
+            sampleRate: 16000,
+            channelCount: 1,
+            bitRate: 128000,
+            fileSize: 0,
+            format: currentAudioFormat
+        )
 
         // Analyze audio quality
         do {
@@ -303,16 +310,31 @@ class EnhancedAudioManager: NSObject {
     }
 
     private func preprocessAudioData(_ data: Data) throws -> Data {
-        return try withUnsafeThrowingContinuation { continuation in
-            audioPreprocessor.preprocessAudioData(data) { result in
-                switch result {
-                case .success(let processedData):
-                    continuation.resume(returning: processedData)
-                case .failure(let error):
-                    continuation.resume(throwing: error)
-                }
+        let semaphore = DispatchSemaphore(value: 0)
+        var resultData: Data?
+        var resultError: Error?
+        
+        audioPreprocessor.preprocessAudioData(data) { result in
+            switch result {
+            case .success(let processedData):
+                resultData = processedData
+            case .failure(let error):
+                resultError = error
             }
+            semaphore.signal()
         }
+        
+        semaphore.wait()
+        
+        if let error = resultError {
+            throw error
+        }
+        
+        guard let processedData = resultData else {
+            throw EnhancedAudioError.processingFailed
+        }
+        
+        return processedData
     }
 
     private func processChunks(_ chunks: [AudioChunkInfo], data: Data, metadata: AudioMetadata, completion: @escaping (EnhancedAudioResult) -> Void) {

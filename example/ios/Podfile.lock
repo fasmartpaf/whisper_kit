@@ -1,0 +1,40 @@
+PODS:
+  - ffmpeg_kit_flutter_new (1.0.0):
+    - ffmpeg_kit_flutter_new/full-gpl (= 1.0.0)
+    - Flutter
+  - ffmpeg_kit_flutter_new/full-gpl (1.0.0):
+    - Flutter
+  - Flutter (1.0.0)
+  - record_ios (1.1.0):
+    - Flutter
+  - whisper_kit (0.0.1):
+    - Flutter
+    - whisper_kit/EnhancedAudio (= 0.0.1)
+  - whisper_kit/EnhancedAudio (0.0.1):
+    - Flutter
+
+DEPENDENCIES:
+  - ffmpeg_kit_flutter_new (from `.symlinks/plugins/ffmpeg_kit_flutter_new/ios`)
+  - Flutter (from `Flutter`)
+  - record_ios (from `.symlinks/plugins/record_ios/ios`)
+  - whisper_kit (from `.symlinks/plugins/whisper_kit/ios`)
+
+EXTERNAL SOURCES:
+  ffmpeg_kit_flutter_new:
+    :path: ".symlinks/plugins/ffmpeg_kit_flutter_new/ios"
+  Flutter:
+    :path: Flutter
+  record_ios:
+    :path: ".symlinks/plugins/record_ios/ios"
+  whisper_kit:
+    :path: ".symlinks/plugins/whisper_kit/ios"
+
+SPEC CHECKSUMS:
+  ffmpeg_kit_flutter_new: 57e1119b327bb2e13a091e0d73576739fb9f22f5
+  Flutter: cabc95a1d2626b1b06e7179b784ebcf0c0cde467
+  record_ios: 840d21cce013c5a3b2168b74a54ebdb4136359e2
+  whisper_kit: cb8d110d5b87f4bcfde67a0893e14997f40b82f1
+
+PODFILE CHECKSUM: a901b0534ebff1a81cfb53fbf723b1bca433de9f
+
+COCOAPODS: 1.16.2

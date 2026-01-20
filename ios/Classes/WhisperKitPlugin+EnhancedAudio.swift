@@ -5,7 +5,7 @@ import os.log
 
 // MARK: - WhisperKitPlugin Enhanced Audio Extension
 
-extension WhisperKitPlugin {
+extension WhisperKitPlugin: EnhancedAudioManagerDelegate {
 
     // MARK: - Enhanced Audio Methods
 
@@ -164,7 +164,22 @@ extension WhisperKitPlugin {
             let data = Data(bytes: channelData[0], count: Int(buffer.frameLength) * MemoryLayout<Float>.size)
             let qualityAnalysis = audioPreprocessor.analyzeAudioQuality(data)
 
-            result([
+            // Determine recommended settings string by comparing key properties
+            let recommendedSettingsString: String
+            let recSettings = qualityAnalysis.recommendedSettings
+            if recSettings.noiseReductionStrength == AudioPreprocessingSettings.default.noiseReductionStrength &&
+               recSettings.targetLevel == AudioPreprocessingSettings.default.targetLevel &&
+               recSettings.enableVoiceEnhancement == AudioPreprocessingSettings.default.enableVoiceEnhancement {
+                recommendedSettingsString = "default"
+            } else if recSettings.noiseReductionStrength == AudioPreprocessingSettings.minimal.noiseReductionStrength &&
+                      recSettings.targetLevel == AudioPreprocessingSettings.minimal.targetLevel &&
+                      !recSettings.enableVoiceEnhancement {
+                recommendedSettingsString = "minimal"
+            } else {
+                recommendedSettingsString = "aggressive"
+            }
+
+            var resultDict: [String: Any] = [
                 "success": true,
                 "qualityAnalysis": [
                     "signalToNoiseRatio": qualityAnalysis.signalToNoiseRatio,
@@ -173,11 +188,16 @@ extension WhisperKitPlugin {
                     "dynamicRange": qualityAnalysis.dynamicRange,
                     "qualityDescription": qualityAnalysis.qualityDescription,
                     "noiseLevelDescription": qualityAnalysis.noiseLevelDescription,
-                    "recommendedSettings": qualityAnalysis.recommendedSettings == .default ? "default" :
-                                     qualityAnalysis.recommendedSettings == .minimal ? "minimal" : "aggressive"
-                ],
-                "metadata": convertAudioMetadataToDict(metadata)
-            ])
+                    "recommendedSettings": recommendedSettingsString
+                ]
+            ]
+
+            // Add metadata if available
+            if let metadata = metadata {
+                resultDict["metadata"] = convertAudioMetadataToDict(metadata)
+            }
+
+            result(resultDict)
 
         } catch {
             result(FlutterError(code: "AUDIO_ANALYSIS_ERROR", message: error.localizedDescription, details: nil))
@@ -286,17 +306,15 @@ extension WhisperKitPlugin {
 
     private func parsePreprocessingSettings(from dict: [String: Any]) -> AudioPreprocessingSettings {
         let qualityString = dict["quality"] as? String ?? "default"
-        let quality: AudioPreprocessingSettings.AudioQuality
 
         switch qualityString.lowercased() {
-        case "minimal": quality = .minimal
-        case "aggressive": quality = .aggressive
-        default: quality = .default
+        case "minimal":
+            return AudioPreprocessingSettings.minimal
+        case "aggressive":
+            return AudioPreprocessingSettings.aggressive
+        default:
+            return AudioPreprocessingSettings.default
         }
-
-        return quality == .default ? AudioPreprocessingSettings.default :
-               quality == .minimal ? AudioPreprocessingSettings.minimal :
-               AudioPreprocessingSettings.aggressive
     }
 
     private func parseVADConfiguration(from dict: [String: Any]) -> VADConfiguration {
@@ -394,6 +412,36 @@ extension WhisperKitPlugin {
             "fileSizeDescription": metadata.fileSizeDescription,
             "format": metadata.format.fileExtension
         ]
+    }
+
+    // MARK: - EnhancedAudioManagerDelegate Implementation
+
+    func audioManager(_ manager: EnhancedAudioManager, didStartProcessing startTime: TimeInterval) {
+        logger.info("Enhanced audio manager started processing at \(startTime)")
+    }
+
+    func audioManager(_ manager: EnhancedAudioManager, didProcessChunk chunk: AudioChunk, transcription: TranscriptionResult?) {
+        logger.info("Enhanced audio manager processed chunk: \(chunk.duration)s")
+    }
+
+    func audioManager(_ manager: EnhancedAudioManager, didDetectVoiceActivity isActive: Bool, timestamp: TimeInterval) {
+        logger.info("Enhanced audio manager detected voice activity: \(isActive) at \(timestamp)")
+    }
+
+    func audioManager(_ manager: EnhancedAudioManager, didUpdateProgress progress: Float) {
+        logger.info("Enhanced audio manager progress: \(progress * 100)%")
+    }
+
+    func audioManager(_ manager: EnhancedAudioManager, didCompleteProcessing finalResult: EnhancedAudioResult) {
+        logger.info("Enhanced audio manager completed processing: \(finalResult.text)")
+    }
+
+    func audioManager(_ manager: EnhancedAudioManager, didEncounterError error: Error) {
+        logger.error("Enhanced audio manager error: \(error.localizedDescription)")
+    }
+
+    func audioManager(_ manager: EnhancedAudioManager, didChangeQuality quality: AudioQuality) {
+        logger.info("Enhanced audio manager quality changed: \(quality.description)")
     }
 }
 

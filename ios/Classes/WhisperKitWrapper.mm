@@ -12,21 +12,21 @@
     const char *audioPathCStr = [audioPath UTF8String];
     const char *modelPathCStr = [modelPath UTF8String];
 
-    // Create JSON request
-    NSMutableDictionary *request = [NSMutableDictionary dictionary];
-    request[@"model"] = modelPath;
-    request[@"audio"] = audioPath;
-    request[@"threads"] = options[@"threads"] ?: @(4);
-    request[@"language"] = options[@"language"] ?: @"auto";
-    request[@"is_verbose"] = options[@"isVerbose"] ?: @(NO);
-    request[@"is_translate"] = options[@"isTranslate"] ?: @(NO);
-    request[@"is_no_timestamps"] = options[@"isNoTimestamps"] ?: @(NO);
-    request[@"is_special_tokens"] = options[@"isSpecialTokens"] ?: @(NO);
-    request[@"split_on_word"] = options[@"splitOnWord"] ?: @(NO);
+    // Create JSON request dictionary
+    NSMutableDictionary *requestDict = [NSMutableDictionary dictionary];
+    requestDict[@"model"] = modelPath;
+    requestDict[@"audio"] = audioPath;
+    requestDict[@"threads"] = options[@"threads"] ?: @(4);
+    requestDict[@"language"] = options[@"language"] ?: @"auto";
+    requestDict[@"is_verbose"] = options[@"isVerbose"] ?: @(NO);
+    requestDict[@"is_translate"] = options[@"isTranslate"] ?: @(NO);
+    requestDict[@"is_no_timestamps"] = options[@"isNoTimestamps"] ?: @(NO);
+    requestDict[@"is_special_tokens"] = options[@"isSpecialTokens"] ?: @(NO);
+    requestDict[@"split_on_word"] = options[@"splitOnWord"] ?: @(NO);
 
     // Convert to JSON string
     NSError *jsonError;
-    NSData *jsonData = [NSJSONSerialization dataWithJSONObject:request options:0 error:&jsonError];
+    NSData *jsonData = [NSJSONSerialization dataWithJSONObject:requestDict options:0 error:&jsonError];
     if (jsonError) {
         NSLog(@"JSON serialization error: %@", jsonError.localizedDescription);
         return nil;
@@ -38,7 +38,8 @@
     // Make a mutable copy for the C function
     char *jsonMutable = strdup(jsonCStr);
 
-    // Call the C++ function
+    // Call the C++ function (declare extern to avoid name collision)
+    extern char *request(char *);
     char *result = request(jsonMutable);
 
     // Convert result back to NSString

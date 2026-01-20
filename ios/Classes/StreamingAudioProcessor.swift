@@ -288,14 +288,17 @@ class StreamingAudioProcessor: NSObject {
         audioBuffer.append(audioData)
 
         // Check if we have enough data for a chunk
-        let chunkSize = Int(chunkDuration * sampleRate * MemoryLayout<Float>.size)
+        let chunkSize = Int(chunkDuration * sampleRate * Double(MemoryLayout<Float>.size))
         if audioBuffer.count >= chunkSize {
             let chunkData = audioBuffer.prefix(chunkSize)
-            audioBuffer.removeFirst(chunkSize - Int(overlapDuration * sampleRate * MemoryLayout<Float>.size))
+            let overlapSize = Int(overlapDuration * sampleRate * Double(MemoryLayout<Float>.size))
+            audioBuffer.removeFirst(chunkSize - overlapSize)
 
+            // Use current time for timestamp (AVAudioTime doesn't provide timeIntervalSince1970)
+            // For real-time processing, current time is appropriate
             let chunk = AudioChunk(
                 data: Data(chunkData),
-                timestamp: time.timeIntervalSince1970,
+                timestamp: Date().timeIntervalSince1970,
                 duration: chunkDuration,
                 audioLevel: audioLevel,
                 containsVoice: containsVoice
@@ -342,12 +345,20 @@ class StreamingAudioProcessor: NSObject {
         simulateTranscription(for: chunk) { [weak self] result in
             let processingTime = Date().timeIntervalSince1970 - startTime
 
-            if var transcriptionResult = result {
-                transcriptionResult.processingTime = processingTime
-                self?.processedTranscriptions.append(transcriptionResult)
+            if let transcriptionResult = result {
+                // Create a new TranscriptionResult with updated processingTime since it's a let constant
+                let updatedResult = TranscriptionResult(
+                    text: transcriptionResult.text,
+                    segments: transcriptionResult.segments,
+                    confidence: transcriptionResult.confidence,
+                    language: transcriptionResult.language,
+                    timestamp: transcriptionResult.timestamp,
+                    processingTime: processingTime
+                )
+                self?.processedTranscriptions.append(updatedResult)
 
                 DispatchQueue.main.async {
-                    self?.delegate?.audioProcessor(self!, didProcessAudioChunk: chunk, transcription: transcriptionResult)
+                    self?.delegate?.audioProcessor(self!, didProcessAudioChunk: chunk, transcription: updatedResult)
                 }
             } else {
                 DispatchQueue.main.async {
@@ -367,9 +378,9 @@ class StreamingAudioProcessor: NSObject {
         }
 
         // Calculate RMS (Root Mean Square)
-        var sum: Float = 0.0
-        vDSP_vsq(samples, 1, &sum, vDSP_Length(samples.count))
-        let rms = sqrt(sum / Float(samples.count))
+        var sumSquares: Float = 0.0
+        vDSP_svesq(samples, 1, &sumSquares, vDSP_Length(samples.count))
+        let rms = sqrt(sumSquares / Float(samples.count))
 
         return min(rms, 1.0)
     }

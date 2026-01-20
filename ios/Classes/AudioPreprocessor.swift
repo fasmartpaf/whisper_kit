@@ -431,9 +431,9 @@ class AudioPreprocessor: NSObject {
     private func calculateRMSLevel(samples: [Float]) -> Float {
         guard !samples.isEmpty else { return 0.0 }
 
-        var sum: Float = 0.0
-        vDSP_vsq(samples, 1, &sum, vDSP_Length(samples.count))
-        return sqrt(sum / Float(samples.count))
+        var sumSquares: Float = 0.0
+        vDSP_svesq(samples, 1, &sumSquares, vDSP_Length(samples.count))
+        return sqrt(sumSquares / Float(samples.count))
     }
 
     private func calculateDynamicRange(samples: [Float]) -> Float {
@@ -551,6 +551,8 @@ private class BiquadFilter {
         let sinW = sin(omega)
         let cosW = cos(omega)
         let alpha = sinW / (2.0 * q)
+
+        var a0: Float
 
         switch type {
         case .lowPass:

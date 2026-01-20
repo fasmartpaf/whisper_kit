@@ -159,7 +159,7 @@ class VoiceActivityDetector: NSObject {
         super.init()
 
         setupThresholds()
-        logger.info("VAD initialized with frame size: \(frameSize), sample rate: \(sampleRate)")
+        logger.info("VAD initialized with frame size: \(self.frameSize), sample rate: \(sampleRate)")
     }
 
     // MARK: - Public Interface
@@ -333,8 +333,8 @@ class VoiceActivityDetector: NSObject {
         }
 
         // Notify state change
-        if previousState != currentState {
-            logger.debug("VAD state changed: \(previousState.description) -> \(currentState.description)")
+        if previousState != self.currentState {
+            logger.debug("VAD state changed: \(previousState.description) -> \(self.currentState.description)")
             DispatchQueue.main.async {
                 self.delegate?.vadDetector(self, didUpdateState: self.currentState)
             }
@@ -351,9 +351,9 @@ class VoiceActivityDetector: NSObject {
     private func calculateEnergy(samples: [Float]) -> Float {
         guard !samples.isEmpty else { return 0.0 }
 
-        var sum: Float = 0.0
-        vDSP_vsq(samples, 1, &sum, vDSP_Length(samples.count))
-        return sqrt(sum / Float(samples.count))
+        var sumSquares: Float = 0.0
+        vDSP_svesq(samples, 1, &sumSquares, vDSP_Length(samples.count))
+        return sqrt(sumSquares / Float(samples.count))
     }
 
     private func calculateZeroCrossingRate(samples: [Float]) -> Float {
@@ -386,12 +386,15 @@ class VoiceActivityDetector: NSObject {
 
         // Copy samples to temp buffer
         paddedSamples.withUnsafeBufferPointer { buffer in
-            tempBuffer.initialize(from: buffer)
+            UnsafeMutableBufferPointer(start: tempBuffer, count: fftSize).initialize(from: buffer)
         }
 
         // Perform FFT
-        vDSP_fft_zrip(vDSP_create_fftsetup(vDSP_Length(log2(Double(fftSize))), FFTRadix(kFFTRadix2))!,
-                      &splitComplex, 1, vDSP_Length(log2(Double(fftSize))))
+        guard let fftSetup = vDSP_create_fftsetup(vDSP_Length(log2(Double(fftSize))), FFTRadix(kFFTRadix2)) else {
+            return (0.0, 0.0)
+        }
+        defer { vDSP_destroy_fftsetup(fftSetup) }
+        vDSP_fft_zrip(fftSetup, &splitComplex, 1, vDSP_Length(log2(Double(fftSize))), FFTDirection(FFT_FORWARD))
 
         // Calculate magnitude spectrum
         var magnitudes = [Float](repeating: 0.0, count: fftSize / 2)

@@ -1,6 +1,7 @@
 import Foundation
 import AVFoundation
 import AudioToolbox
+import CoreMedia
 import os.log
 
 enum AudioFormat {
@@ -168,27 +169,37 @@ class AudioFormatConverter: NSObject {
     func getAudioMetadata(url: URL) -> AudioMetadata? {
         let asset = AVURLAsset(url: url)
 
-        guard let duration = asset.duration.seconds,
-              duration > 0 else { return nil }
+        let duration = asset.duration.seconds
+        guard !duration.isNaN && !duration.isInfinite && duration > 0 else { return nil }
 
         var sampleRate: Double = 0
         var channelCount: Int = 0
         var bitRate: Int = 0
 
+        // Get file size first (needed for bitrate estimation)
+        let fileSize = (try? FileManager.default.attributesOfItem(atPath: url.path)[.size] as? Int64) ?? 0
+
         if let audioTrack = asset.tracks(withMediaType: .audio).first {
             let formatDescriptions = audioTrack.formatDescriptions
             for formatDescription in formatDescriptions {
-                if let streamDescription = formatDescription.streamBasicDescription {
-                    sampleRate = streamDescription.pointee.mSampleRate
-                    channelCount = Int(streamDescription.pointee.mChannelsPerFrame)
+                let cfFormatDescription = formatDescription as! CMAudioFormatDescription
+                if let asbd = CMAudioFormatDescriptionGetStreamBasicDescription(cfFormatDescription) {
+                    sampleRate = Double(asbd.pointee.mSampleRate)
+                    channelCount = Int(asbd.pointee.mChannelsPerFrame)
+                    // Estimate bitrate from track
+                    let dataRate = audioTrack.estimatedDataRate
+                    if !dataRate.isNaN && !dataRate.isInfinite && dataRate > 0 {
+                        bitRate = Int(dataRate)
+                    }
                     break
                 }
             }
         }
 
-        bitRate = Int(asset.preferredTrackRate) // Approximation
-
-        let fileSize = (try? FileManager.default.attributesOfItem(atPath: url.path)[.size] as? Int64) ?? 0
+        // If bitrate not set, estimate from file size and duration
+        if bitRate == 0 && duration > 0 {
+            bitRate = Int((Double(fileSize) * 8.0) / duration)
+        }
 
         return AudioMetadata(
             duration: duration,
@@ -234,7 +245,8 @@ class AudioFormatConverter: NSObject {
             }
 
             // Configure converter
-            converter.bitRate = settings.bitRate
+            // Note: AVAudioConverter doesn't support setting bitRate directly
+            // Bit rate is controlled via the output format settings
             converter.sampleRateConverterQuality = .max
 
             // Perform conversion
@@ -340,7 +352,7 @@ class AudioFormatConverter: NSObject {
     private func createTargetFormat(settings: AudioConversionSettings) -> AVAudioFormat {
         switch settings.targetFormat {
         case .wav, .pcm:
-            return AVAudioFormat(commonFormat: .pcmFormatInt16, sampleRate: settings.sampleRate, channels: settings.channelCount, interleaved: false)!
+            return AVAudioFormat(commonFormat: .pcmFormatInt16, sampleRate: settings.sampleRate, channels: AVAudioChannelCount(settings.channelCount), interleaved: false)!
         case .m4a, .aac:
             return AVAudioFormat(settings: [
                 AVFormatIDKey: kAudioFormatMPEG4AAC,
@@ -362,7 +374,7 @@ class AudioFormatConverter: NSObject {
                 AVSampleRateKey: settings.sampleRate,
                 AVNumberOfChannelsKey: settings.channelCount,
                 AVLinearPCMBitDepthKey: settings.bitDepth,
-                AVEncoderAudioQualityKey: AudioQuality.lossless.rawValue
+                AVEncoderAudioQualityKey: AudioConversionSettings.AudioQuality.lossless.rawValue
             ])!
         case .ogg:
             return AVAudioFormat(settings: [
@@ -421,7 +433,8 @@ class AudioFormatConverter: NSObject {
     }
 
     private func createPCMBuffer(from data: Data, format: AVAudioFormat) throws -> AVAudioPCMBuffer {
-        let frameCount = AVAudioFrameCount(data.count / (format.streamDescription.pointee.mBytesPerFrame))
+        let bytesPerFrame = Int(format.streamDescription.pointee.mBytesPerFrame)
+        let frameCount = AVAudioFrameCount(data.count / bytesPerFrame)
         let buffer = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: frameCount)!
 
         if let floatChannelData = buffer.floatChannelData {
